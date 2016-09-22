@@ -1,0 +1,174 @@
+---
+title: "Meditation: Behavioural analysis"
+author: "Egor Ananyev"
+date: '2016-08-17'
+output:
+    html_document:
+        toc: true
+---
+
+<style type="text/css">
+body, td{
+  font-family: Cambria;
+}
+code.r{
+  font-family: Inconsolata;
+}
+</style>
+
+# Preparing the data
+
+## Loading the packages and data
+```{r set-options, message=F, warning=F}
+options(width=108)
+out=F
+# The list of subjects, the order of conditions, and the thresholds are derived from Subjects.xlsx
+library(xlsx)
+library(ggplot2)
+library(plyr)
+#library(matrixStats)
+#library(splines)
+library(reshape)
+library(lme4)
+library(lmerTest)
+homeDir <- path.expand('~')
+# Neat functions:
+#source(paste(db, 'Prog/R/myFunctions/blackTheme.R', sep=''))
+source(paste(homeDir, '../Dropbox/Prog/R/general_functions/multiplot.R', sep='/'))
+# Read in the Excel worksheet:
+inFP <- paste(homeDir, '../Dropbox/Projects/md/dti/MAPRCT_Consolidated_v2.xlsx', sep='/')
+df <- read.xlsx(file=inFP, 'tabbed', colIndex=c(1:26), header=T)
+#outlFac <- 2.5 # outlier factor
+```
+
+## Pre-processing the data
+```{r}
+# Filtering out bad subjects:
+cdf <- df[df$bad==0,] # clean df
+cdf <- subset(cdf, select=-c(bad))
+idCols <- c(1:9,15)
+ldf <- melt(cdf, id=idCols) # long df
+# Entering visit number ("time1", "time2", "time3"):
+ldf$visit <- 1
+ldf$visit[grepl('_2', ldf$variable)] <- 2
+ldf$visit[grepl('_3', ldf$variable)] <- 3
+# Shortening the program name:
+ldf$program[ldf$Program=='Health Education Program'] <- 'HEP'
+ldf$program[ldf$Program=='Mindful Awareness  Program'] <- 'MAP'
+ldf <- subset(ldf, select=-c(Program))
+# Renaming the variables to no longer include visit number:
+ldf$variable[grepl('mmse', ldf$variable)] <- 'mmse'
+ldf$variable[grepl('cdr', ldf$variable)] <- 'cdr'
+ldf$variable[grepl('nca_del', ldf$variable)] <- 'nca_del'
+ldf$variable[grepl('nca_rec', ldf$variable)] <- 'nca_rec'
+ldf$variable[grepl('nca_blk', ldf$variable)] <- 'nca_blk'
+# Dropping deleted levels of a factor:
+ldf$variable <- ldf$variable[,drop=T]
+# Reshaping the formatted data frame into ds:
+ds <- cast(ldf, subjID + program + run12 + run23 + run13 + runSum +
+                age + gender + edu + attend + visit ~ variable)
+bds <- ds[ds$runSum==3,] # balanced ds
+bds <- bds[,c(1:2,7:16)]
+head(bds)
+# Dealing with 999's:
+ds[ds==999] <- NA
+bds[bds==999] <- NA
+```
+
+# Quality control
+```{r, fig.height=3, fig.width=4}
+summary(ds[,7:10])
+summary(bds[,3:6])
+ddply(ds, .(program), summarise, ageMean=mean(age), ageSD=sd(age),
+      genderMean=mean(gender), eduMean=mean(edu), eduSD=sd(edu),
+      attendMean=mean(attend), attendSD=sd(attend))
+ddply(bds, .(program), summarise, ageMean=mean(age), ageSD=sd(age),
+      genderMean=mean(gender), eduMean=mean(edu), eduSD=sd(edu),
+      attendMean=mean(attend), attendSD=sd(attend))
+```
+
+# Plots
+
+## Unbalanced data set
+```{r, fig.height=6, fig.width=8}
+p1 <- ggplot(ds, aes(x=factor(visit), y=mmse, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='MMSE Score',
+                          title='MMSE') + theme_bw()
+p2 <- ggplot(ds, aes(x=factor(visit), y=nca_del, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='Delayed Recall Score',
+                          title='Delayed Recall') + theme_bw()
+p3 <- ggplot(ds, aes(x=factor(visit), y=nca_rec, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='Registration Score',
+                          title='Registration') + theme_bw()
+p4 <- ggplot(ds, aes(x=factor(visit), y=nca_blk, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='Block Design Score',
+                          title='Block Design') + theme_bw()
+multiplot(p1,p2,p3,p4,cols=2)
+```
+
+## Balanced data set
+```{r, fig.height=6, fig.width=8}
+p1 <- ggplot(bds, aes(x=factor(visit), y=mmse, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='MMSE Score',
+                          title='MMSE') + theme_bw()
+p2 <- ggplot(bds, aes(x=factor(visit), y=nca_del, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='Delayed Recall Score',
+                          title='Delayed Recall') + theme_bw()
+p3 <- ggplot(bds, aes(x=factor(visit), y=nca_rec, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='Registration Score',
+                          title='Registration') + theme_bw()
+p4 <- ggplot(bds, aes(x=factor(visit), y=nca_blk, colour=factor(program))) +  
+    geom_boxplot() + labs(x='Time', colour='Program', y='Block Design Score',
+                          title='Block Design') + theme_bw()
+multiplot(p1,p2,p3,p4,cols=2)
+```
+
+# Stats
+
+## Unbalanced
+```{r}
+library(lme4)
+source(paste(homeDir, '../Dropbox/Prog/R/myFunctions/pvalfn.R', sep='/'))
+
+uds <- ds[ds$run12==1,]
+uds <- uds[,c(1:2,7:16)]
+
+# Centering some variables:
+uds$program_c <- -1
+uds$program_c[uds$program=='MAP'] <- 1
+uds$age_c <- uds$age - mean(uds$age)
+uds$gender[uds$gender==2] <- 0
+uds$edu_c <- uds$edu - mean(uds$edu)
+
+m_mmse <- lmer(mmse~age_c+gender+edu_c+program_c*visit+(1|subjID), uds)
+pvalfn(m_mmse)
+m_cdr <- lmer(cdr~age_c+gender+edu_c+program_c*visit+(1|subjID), uds)
+pvalfn(m_cdr)
+m_nca_del <- lmer(nca_del~age_c+gender+edu_c+program_c*visit+(1|subjID), uds)
+pvalfn(m_nca_del)
+m_nca_rec <- lmer(nca_rec~age_c+gender+edu_c+program_c*visit+(1|subjID), uds)
+pvalfn(m_nca_rec)
+m_nca_blk <- lmer(nca_blk~age_c+gender+edu_c+program_c*visit+(1|subjID), uds)
+pvalfn(m_nca_blk)
+```
+
+## Balanced
+```{r}
+# Centering some variables:
+bds$program_c <- -1
+bds$program_c[bds$program=='MAP'] <- 1
+bds$age_c <- bds$age - mean(bds$age)
+bds$gender[bds$gender==2] <- 0
+bds$edu_c <- bds$edu - mean(bds$edu)
+
+m_mmse <- lmer(mmse~age_c+gender+edu_c+program_c*visit+(1|subjID), bds)
+pvalfn(m_mmse)
+m_cdr <- lmer(cdr~age_c+gender+edu_c+program_c*visit+(1|subjID), bds)
+pvalfn(m_cdr)
+m_nca_del <- lmer(nca_del~age_c+gender+edu_c+program_c*visit+(1|subjID), bds)
+pvalfn(m_nca_del)
+m_nca_rec <- lmer(nca_rec~age_c+gender+edu_c+program_c*visit+(1|subjID), bds)
+pvalfn(m_nca_rec)
+m_nca_blk <- lmer(nca_blk~age_c+gender+edu_c+program_c*visit+(1|subjID), bds)
+pvalfn(m_nca_blk)
+```

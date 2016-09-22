@@ -1,0 +1,37 @@
+---
+title: "ROI-based DTI analysis"
+author: "Egor Ananyev"
+date: "25 August 2016"
+output: html_document
+---
+
+```{r}
+
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+library(oro.nifti)
+library(fslr)
+
+# System-specific paths:
+homeDir <- '/Users/Egor/' # MacOS
+atlDir <- 'Applications/fsl/data/atlases/JHU/' # MacOS
+
+# Load the WM labels:
+wmLabels <- readNIfTI(paste(atlDir, 'JHU-ICBM-T2-1mm.nii.gz'))
+
+# Loading the data:
+allComps <- c(12, 13, 23)
+curComp <- 1 # 1=12, 2=13, 3=23
+dataDir <- paste(homeDir, 'Documents/MyDocs/DTI/tbss', as.character(allComps[curComp]), 
+                 '-bal/stats/', sep='')
+img <- readNIfTI(paste(dataDir, 'all_FA_skeletonised.nii.gz', sep=''), reorient=F)
+
+# Load the subject data set
+curSubj <- 'MCI001'
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,138 @@
+---
+title: "ROI-based DTI analysis"
+author: "Egor Ananyev"
+date: "29 August 2016"
+output:
+    html_document:
+        toc: true
+---
+
+<style type="text/css">
+body, td{
+  font-family: Cambria;
+}
+code.r{
+  font-family: Inconsolata;
+}
+</style>
+
+# Preparation
+
+## Loading the data set and the libraries
+```{r}
+options(width=108)
+out=F
+library(xlsx)
+library(ggplot2)
+library(plyr)
+# '../' is only necessary on Windows
+projDir <- paste(path.expand('~'), 'Dropbox/Projects/md/dti/', sep='/')
+wmLabels <- read.xlsx(file=paste(projDir, 'analyses/wmLabels.xlsx', sep=''), 1)
+```
+
+## Subsetting to the ROI list 1 (CC & CR)
+```{r}
+# Corpus callosum and corona radiata:
+ds <- read.csv(paste(projDir, 'analyses/roiDS.csv', sep=''))
+roiList1 <- c(3:5,24,26,28,23,25,27)
+ds1 <- ds[ds$labelID %in% roiList1,]
+```
+
+# Plots
+
+## FA
+```{r, fig.height=3, fig.width=3}
+sumds1 <- ddply(ds1, c('group','run','Abbrev','labelID','Label'), summarise, 
+                meanFA=mean(value))
+head(sumds1)
+for(curRoi in roiList1){
+    p = ggplot(sumds1[sumds1$labelID==curRoi,], aes(x=run, y=meanFA, color=group)) + 
+        geom_point() + geom_line() + scale_x_continuous(breaks = 1:3) +
+        labs(x='Time point', y='Mean FA value', color='Group',
+             title=unique(sumds1[sumds1$labelID==curRoi, 'Label'])) + theme_bw()
+    plot(p)
+}
+```
+
+### HEP group (control)
+```{r, fig.height=4, fig.width=3}
+sumds1subj <- ddply(ds1, c('subjID', 'group','run','Abbrev','labelID','Label'), summarise, 
+                meanFA=mean(value))
+head(sumds1subj)
+for(curRoi in roiList1){
+    sumds1ss <- sumds1subj[sumds1subj$labelID==curRoi & sumds1subj$group=='HEP',]
+    p = ggplot(sumds1ss, aes(x=run, y=meanFA, color=subjID)) + 
+        geom_point() + geom_line() + scale_x_continuous(breaks = 1:3) +
+        labs(x='Time point', y='Mean FA value', color='Participant',
+             title=unique(sumds1[sumds1$labelID==curRoi, 'Label'])) + 
+        theme_bw()
+    plot(p)
+}
+```
+
+### MAP group (meditation)
+```{r, fig.height=4, fig.width=3}
+for(curRoi in roiList1){
+    sumds1ss <- sumds1subj[sumds1subj$labelID==curRoi & sumds1subj$group=='MAP',]
+    p = ggplot(sumds1ss, aes(x=run, y=meanFA, color=subjID)) + 
+        geom_point() + geom_line() + scale_x_continuous(breaks = 1:3) +
+        labs(x='Time point', y='Mean FA value', color='Participant',
+             title=unique(sumds1[sumds1$labelID==curRoi, 'Label'])) + 
+        theme_bw()
+    plot(p)
+}
+```
+
+## AD
+```{r, fig.height=3, fig.width=3}
+dsad <- read.csv(paste(projDir, 'analyses/roiDS_AD.csv', sep=''))
+dsad1 <- dsad[dsad$labelID %in% roiList1,]
+sumdsad1 <- ddply(dsad1, c('group','run','Abbrev','labelID','Label'), summarise, 
+                meanFA=mean(value))
+head(sumdsad1)
+for(curRoi in roiList1){
+    p = ggplot(sumdsad1[sumdsad1$labelID==curRoi,], aes(x=run, y=meanFA, color=group)) + 
+        geom_point() + geom_line() + scale_x_continuous(breaks = 1:3) +
+        labs(x='Time point', y='Mean AD value', color='Group',
+             title=unique(sumdsad1[sumdsad1$labelID==curRoi, 'Label'])) + theme_bw()
+    plot(p)
+}
+```
+
+## RD
+```{r, fig.height=3, fig.width=3}
+dsrd <- read.csv(paste(projDir, 'analyses/roiDS_RD.csv', sep=''))
+dsrd1 <- dsrd[dsrd$labelID %in% roiList1,]
+sumdsrd1 <- ddply(dsrd1, c('group','run','Abbrev','labelID','Label'), summarise, 
+                meanFA=mean(value))
+head(sumdsrd1)
+for(curRoi in roiList1){
+    p = ggplot(sumdsrd1[sumdsrd1$labelID==curRoi,], aes(x=run, y=meanFA, color=group)) + 
+        geom_point() + geom_line() + scale_x_continuous(breaks = 1:3) +
+        labs(x='Time point', y='Mean RD value', color='Group',
+             title=unique(sumdsrd1[sumdsrd1$labelID==curRoi, 'Label'])) + theme_bw()
+    plot(p)
+}
+```
+
+# Age
+
+## FA
+```{r, fig.height=3, fig.width=5}
+dsr1 <- ds[ds$run==1,]
+p <- ggplot(dsr1, aes(x=age, y=value)) + 
+    geom_point() + stat_smooth(method='lm', alpha=.1) +
+    labs(x='Age', y='FA value', title='FA & age') + theme_bw() + 
+    theme(legend.position='none')
+plot(p)
+```
+
+## FA across structures
+```{r, fig.height=2, fig.width=2}
+for(curRoi in unique(ds$Abbrev)){
+    p <- ggplot(dsr1[dsr1$Abbrev==curRoi,], aes(x=age, y=value)) + 
+        geom_point() + stat_smooth(method='lm') +
+        labs(x='Age', y='FA value', title=curRoi) + theme_bw()
+    plot(p)
+}
+```

@@ -1,0 +1,55 @@
+---
+title: "ROI-based DTI analysis: Voxel-based validity check"
+author: "Egor Ananyev"
+date: "2016-09-03"
+output:
+    html_document:
+        toc: true
+---
+
+<style type="text/css">
+body, td{
+  font-family: Cambria;
+}
+code.r{
+  font-family: Inconsolata;
+}
+</style>
+
+# Preparation
+
+## Loading the data set and the libraries
+```{r}
+options(width=108)
+out=F
+library(xlsx)
+library(ggplot2)
+library(plyr)
+#db <- '/home/egor/Dropbox/' # on Linux
+#db <- '~/Dropbox/' # on Mac
+homeDir <- path.expand('~')
+projDir <- paste(path.expand('~'), '/Dropbox/Projects/md/dti/', sep='')
+ds <- read.csv(paste(projDir, 'analyses/voxDS_FA_fixed.csv', sep=''))
+# Number of voxels:
+nVox <- length(levels(factor(ds$curVox)))
+```
+
+# Plots
+
+## FA
+```{r, fig.height=3, fig.width=3}
+sumds <- ddply(ds, c('group','run','curVox','x','y','z'), summarise, 
+                meanFA=mean(voxVal))
+head(sumds)
+for(curRoi in 1:nVox){
+    sumss <- sumds[sumds$curVox==curRoi,]
+    voxCoords <- paste(as.character(sumss[1,'x']),
+                       as.character(sumss[1,'y']),
+                       as.character(sumss[1,'z']),
+                       sep=',')
+    p = ggplot(sumss, aes(x=run, y=meanFA, color=group)) + 
+        geom_point() + geom_line() + scale_x_continuous(breaks = 1:3) +
+        labs(x='Time point', y='Mean FA value', color='Group', title=voxCoords) + theme_bw()
+    plot(p)
+}
+```
